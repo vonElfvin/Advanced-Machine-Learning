@@ -1,0 +1,530 @@
+---
+title: "All Exams"
+author: "Elvin Granat"
+date: '2018-10-20'
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+require(knitr)
+library("bnlearn")
+library("gRain")
+```
+
+## 1. Graphical Models
+```{r}
+data("asia")
+set.seed(123)
+BN = hc(asia, score="bde", restart=10)
+plot(BN)
+```
+Query network to prove probabilistic independency of D-separation
+```{r}
+set.seed(123)
+BN.fit = bn.fit(BN, asia)
+P_L_given_S = cpquery(BN.fit, (L == "yes"), (S == 'yes'))
+P_B_given_S = cpquery(BN.fit, (B == "yes"), (S == "yes"))
+P_BL_given_S = cpquery(BN.fit, ((L == "yes") & (B == "yes")), (S == "yes"))
+P_BL_given_S - P_L_given_S * P_B_given_S 
+# almost zero ~ independent using independece test: P(B,L|S) = P(B|S)*P(L|S)
+```
+
+Fraction of the 29281 5 node DAGs that can be represented with a markov network
+```{r}
+n = 1000
+set.seed(124)
+random_graphs = random.graph(LETTERS[1:5], num = n, method = "melancon")
+
+moral_graphs = lapply(random_graphs, moral)
+skeletons = lapply(random_graphs, skeleton)
+```
+
+```{r}
+mean(moral_graphs %in% skeletons)
+k = 0
+for(i in 1:n) {
+  if(all.equal(moral_graphs[[i]], skeletons[[i]]) == TRUE) k = k + 1
+}
+k/n
+```
+
+
+```{r warning=FALSE}
+k = 0
+for(i in 1:n) {
+  if(all.equal(moral_graphs[[i]], skeletons[[i]]) == TRUE) k = k + 1
+}
+k/n
+# Same result as above
+```
+
+c)
+(Using the encoded independences to compute posterior probability distribution (with corresponding prior distribution) when observing new data.)
+Using for example the Lauritzen-Spiegelhalter Algorithm 
+## 2. HMM
+```{r}
+library("HMM")
+observation = c(1,11,11,11)
+```
+
+
+```{r}
+states = 1:10
+symbols = 1:11
+startProbs = rep(0.1, 10)
+transProbs = diag(0.5, 10) + diag(0.5, 10)[,c(10,1:9)]
+emissionProbs = 
+  diag(0.1, 10)[,c(10,1:9)] +
+  diag(0.1, 10)[,c(9:10,1:8)] +
+  diag(0.1, 10) +
+  diag(0.1, 10)[,c(2:10,1)] +
+  diag(0.1, 10)[,c(3:10,1:2)]
+emissionProbs = cbind(emissionProbs, 0.5)
+hmm = initHMM(states, symbols, startProbs = startProbs, transProbs = transProbs, emissionProbs = emissionProbs)
+```
+
+```{r}
+alpha = exp(forward(hmm, observation))
+beta = exp(backward(hmm, observation))
+alphaBetaSum = apply(alpha * beta, 2, sum)
+
+smoothing = matrix(NA, 10, 4)
+for(t in 1:4) {
+  smoothing[,t] = (alpha[,t] * beta[,t]) / alphaBetaSum[t]
+}
+
+which.maxima = function(x) {
+  return(which(x == max(x)))
+}
+print("Smoothing:")
+for(t in 1:4) {
+  print(which.maxima(smoothing[,t]))
+}
+
+print("Viterbi")
+path = viterbi(hmm, observation)
+path
+```
+
+Weather forcasting
+```{r}
+# Initialization
+states = c("s1", "s2", "r1", "r2")
+symbols = c("S", "R")
+startProbs = c(0.5, 0, 0.5, 0)
+transProbs = matrix(c(
+  0, 0.5, 0.5, 0,
+  0, 0.75, 0.25, 0,
+  0.5, 0, 0, 0.5,
+  0.25, 0, 0, 0.75
+), 4, 4, byrow = TRUE, dimnames=list(c("s1", "s2", "r1", "r2"), c("s1", "s2", "r1", "r2")))
+emissionProbs = matrix(c(
+  0.9, 0.1,
+  0.1, 0.9
+), 2, 2, byrow = TRUE, dimnames = list(c("S", "R"), c("S", "R")))
+hmm = initHMM(states, symbols, startProbs = startProbs, transProbs = transProbs, emissionProbs = emissionProbs)
+
+# Simulation
+set.seed(123)
+sim = simHMM(hmm, 10)
+sim$states
+sim$observation
+```
+
+## 2016-10-20 Exam
+
+## 1 Graphical Models
+```{r}
+library("bnlearn")
+data("asia")
+```
+
+a)
+```{r}
+set.seed(123)
+BN = hc(asia)
+BN.fit = bn.fit(BN, asia)
+
+# Approximate inference
+approx_query = cpquery(BN.fit, event = (A == "yes"), evidence = ((X =="yes") & (B == "yes")))
+approx_query
+
+# Exact inference
+junction_tree = compile(as.grain(BN.fit))
+evidence = setEvidence(junction_tree, nodes = c("X", "B"), states = c("yes", "yes"))
+exact_query = querygrain(evidence, nodes = c("A"), type="joint")
+exact_query
+
+```
+
+b)
+```{r}
+set.seed(123)
+nGraphs = 5000
+graphs = random.graph(nodes = LETTERS[1:5], num = nGraphs, method = "melancon", every = 5, burn.in = nGraphs/5)
+skeletons = lapply(graphs, skeleton)
+moral_graphs = lapply(graphs, moral)
+k = 0
+for(i in 1:nGraphs) {
+  if(all.equal(skeletons[[i]], moral_graphs[[i]]) == TRUE) k = k + 1
+}
+k/nGraphs
+# 0.295
+```
+
+c)
+Probabilist reasoning can be performed using the Lauritzen Speigelhalter Algorithm.
+
+\newpage
+
+## 2 HMM
+a) 
+See above
+
+b) 
+```{r}
+states = c("A1", "A2", "B1", "B2", "C1", "C2", "D1", "D2", "E1", "E2")
+symbols = LETTERS[1:5]
+startProbs = rep(c(0.2,0), 5) # 0.2 0.0 0.2 0.0 0.2 0.0 0.2 0.0 0.2 0.0 (20% to start on each state)
+transProbs = matrix(c(
+  0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0.5, 0.5, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0.5, 0.5, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0.5, 0.5, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0.5, 0.5, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+  0.5, 0, 0, 0, 0, 0, 0, 0, 0, 0.5
+), 10, 10, byrow=TRUE, dimnames = list(states, states))
+rownames(transProbs) = states
+
+# Two ways to create the emission probability matrix
+emissionProbs2 = 
+  diag(1/3, 5)[,c(5,1:4)] +
+  diag(1/3, 5) +
+  diag(1/3, 5)[,c(2:5,1)]
+emissionProbs2 = emissionProbs2[rep(1:5,each=2),]
+
+emissionProbs = matrix(c(
+  1/3, 1/3, 0, 0, 1/3,
+  1/3, 1/3, 0, 0, 1/3,
+  1/3, 1/3, 1/3, 0, 0,
+  1/3, 1/3, 1/3, 0, 0,
+  0, 1/3, 1/3, 1/3, 0,
+  0, 1/3, 1/3, 1/3, 0,
+  0, 0, 1/3, 1/3, 1/3,
+  0, 0, 1/3, 1/3, 1/3,
+  1/3, 0, 0, 1/3, 1/3,
+  1/3, 0, 0, 1/3, 1/3
+), 10, 5, byrow=TRUE, dimnames = list(states, symbols))
+hmm = initHMM(states, symbols, startProbs = startProbs, transProbs = transProbs, emissionProbs = emissionProbs)
+kable(transProbs, caption="Transition probabilities")
+kable(emissionProbs, caption="Emission probabilities", digits=2)
+``` 
+
+c) ForwardBackward Algorithm
+
+## 3 Gaussian Processes
+
+Kernels
+```{r}
+K1 = function(sigmaF, l) {
+  k1 = function(x,y) {
+    r = abs(x-y)
+    sigmaF^2 * exp(-0.5 * (r / l)^2)
+  }
+  class(k1) = "kernel"
+  return(k1)
+}
+K2 = function(sigmaF, l, alpha) {
+  k2 = function(x,y) {
+    r = abs(x-y)
+    sigmaF^2 * (1 + r^2 / (2 * alpha * l^2))^-alpha
+  }
+  class(k2) = "kernel"
+  return(k2)
+}
+K3 = function(sigmaF, l) {
+  k3 = function(x, y) {
+    r = abs(x-y)
+    sigmaF^2 * (1 + sqrt(3) * r / l) * exp(-sqrt(3) * r / l)
+  }
+  class(k3) = "kernel"
+  return(k3)
+}
+```
+
+
+a)
+```{r}
+# Kernel setup
+sigmaF = 1
+l = 1
+r = seq(0, 4, by=0.01)
+k1 = K1(sigmaF, l)
+k2_1 = K2(sigmaF, l, 0.5)
+k2_2 = K2(sigmaF, l, 2)
+k2_3 = K2(sigmaF, l, 20)
+k3 = K3(sigmaF, l)
+
+# Plot
+colors = c("red", "black", "orange", "green", "blue")
+line = c(1,2,2,2,3)
+plot(NA, xlim=c(0,4), ylim=c(0,1), main="Kernel comparison", xlab="r", ylab="k(r)")
+lines(r, k1(r,0), col = colors[1], lty=line[1])
+lines(r, k2_1(r,0), col = colors[2], lty=line[2])
+lines(r, k2_2(r,0), col = colors[3], lty=line[3])
+lines(r, k2_3(r,0), col = colors[4], lty=line[4])
+lines(r, k3(r,0), col = colors[5], lty= line[5])
+legend("topright", legend=c("k1", "k2 alpha=0.5", "k2 alpha=2", "k2 alpha=20", "k3"), col=colors, lty=line)
+```
+Reasonable smoothness of nearby values regardless of kernel, because of the high correlation (given sigmaF = 1) for smaller r values. Simulated values will be "smooth" in regards to each other, that is close points (input x) will have close values (output f).
+
+We can also see that k2 with alpha = 0.5 will be the smoothest simulations.
+
+k3 will be the least smooth for close points, comparable to k1 and k2 alpha = 20 on further away points (r>2).
+
+Smaller alpha = more smooth, Larger alpha = k2 moves towards k1 (SEK).
+
+Simulation
+```{r}
+library("mvtnorm")
+
+# Simulation
+set.seed(123)
+n = length(r)
+x = seq(-2, 2, by=0.01)
+mean = rep(0,n)
+sim1 = rmvnorm(1, mean = mean, sigma = kernelMatrix(kernel = k1, x, x))
+sim2_1 = rmvnorm(1, mean = mean, sigma = kernelMatrix(kernel = k2_1, x, x))
+sim2_2 = rmvnorm(1, mean = mean, sigma = kernelMatrix(kernel = k2_2, x, x))
+sim2_3 = rmvnorm(1, mean = mean, sigma = kernelMatrix(kernel = k2_3, x, x))
+sim3 = rmvnorm(1, mean = mean, sigma = kernelMatrix(kernel = k3, x, x))
+
+# Plot
+plot(NA, xlim=c(-2,2), ylim=c(-2,2), main="Kernel comparison", xlab="x", ylab="f")
+lines(x, sim1, col = colors[1], lty=line[1])
+lines(x, sim2_1, col = colors[2], lty=line[2])
+lines(x, sim2_2, col = colors[3], lty=line[3])
+lines(x, sim2_3, col = colors[4], lty=line[4])
+lines(x, sim3, col = colors[5], lty= line[5])
+legend("bottomright", legend=c("k1", "k2 alpha=0.5", "k2 alpha=2", "k2 alpha=20", "k3"), col=colors, lty=line)
+```
+k1 and k2 alpha=20 equally smooth
+k3 the least smooth (low correlation for close points)
+
+b)
+```{r}
+# Setup
+load("GPData.RData")
+sigmaN = 0.5
+xStar = seq(min(x), max(x), length.out=100)
+k1_kernel = K1(sigmaF = 1, l = 1)
+k3_kernel = K3(sigmaF = 1, l = 1)
+
+# GP
+GPk1 = gausspr(x, y, kernel = k1_kernel)
+GPk3 = gausspr(x, y, kernel = k3_kernel)
+
+# Posterior mean
+postMeanK1 = predict(GPk1, xStar)
+postMeanK3 = predict(GPk3, xStar)
+
+# Posterior variance
+Cov = function(x, xStar, k, sigmaN) {
+  n = length(x)
+  I = diag(n)
+  
+  Kss = kernelMatrix(kernel = k, x = xStar, y = xStar)
+  Ksx = kernelMatrix(kernel = k, x = xStar, y = x)
+  Kxs = t(Ksx)
+  Kxx = kernelMatrix(kernel = k, x = x, y = x)
+  V = Kss - Ksx %*% solve( Kxx + sigmaN^2 * I ) %*% Kxs
+  
+  return(diag(V))
+}
+
+Vk1 = Cov(scale(x), scale(xStar), k1_kernel, sigmaN)
+Vk3 = Cov(scale(x), scale(xStar), k3_kernel, sigmaN)
+
+# Plots
+plot(x,y, main="Posterior using k1")
+lines(xStar, postMeanK1, col="red")
+lines(xStar, postMeanK1 + 1.96 * sqrt(Vk1), col="black")
+lines(xStar, postMeanK1 - 1.96 * sqrt(Vk1), col="black")
+lines(xStar, postMeanK1 + 1.96 * sqrt(Vk1 + sigmaN^2), col="blue")
+lines(xStar, postMeanK1 - 1.96 * sqrt(Vk1 + sigmaN^2), col="blue")
+legend("bottomright", legend=c("posterior mean", "probability interval f", "predictive interval y"),
+       col=c("red", "black", "blue"), lty=c(1,1,1))
+
+plot(x,y, main="Posterior using k3")
+lines(xStar, postMeanK3, col="red")
+lines(xStar, postMeanK3 + 1.96 * sqrt(Vk3), col="black")
+lines(xStar, postMeanK3 - 1.96 * sqrt(Vk3), col="black")
+lines(xStar, postMeanK3 + 1.96 * sqrt(Vk3 + sigmaN^2), col="blue")
+lines(xStar, postMeanK3 - 1.96 * sqrt(Vk3 + sigmaN^2), col="blue")
+legend("bottomright", legend=c("posterior mean", "probability interval f", "predictive interval y"),
+       col=c("red", "black", "blue"), lty=c(1,1,1))
+```
+i) k1 results in a smoother posterior mean than k3 as explained in a). 
+
+ii) 95% probability interval for the true f function, more uncertain with a less smooth prior and less data points.
+
+iii) 95% predictive interval for new data points y, a lot wider than ii) since it takes the epsilon with sigmaN into account. Very wide here with the given sigmaN.
+
+ii) is the 95% interval of where f (the posterior mean) whereas iii) is the predictive interval of unknown point y with regards to the noise of a standard deviation sigmaN.
+
+Differences: More smoothness in k1 with more certainty of the intervals.
+
+c)
+
+TODO
+
+## State-Space Models
+a)
+```{r}
+FF = c(1, 0)
+colnames = list(c("alpha", "beta"), c("alpha", "beta"))
+GG = matrix(c(
+  1, 1,
+  0, 1
+), 2, 2, byrow=TRUE, dimnames = colnames)
+V = 0.16
+W = matrix(c(
+  0.035, 0,
+  0, 3.06 * 10 ^ -12
+), 2, 2, byrow=TRUE, dimnames = colnames)
+mu0 = c(10, 0)
+Sigma0 = diag(10^2, 2)
+dimnames(Sigma0) = colnames
+kable(GG, caption="G")
+kable(Sigma0, caption="Sigma0")
+print("W:")
+W
+```
+```{r}
+library("dlm")
+load("Radiation_data.Rda")
+args = function(parm) {
+  list(m0=mu0, C0=Sigma0, FF=t(FF), V=V, GG=GG, W=W)
+}
+# DLM = dlm(args)
+MLE = dlmMLE(Radiation_data$dose, parm=c(0,0,0,0,0,0), build=args)
+```
+
+## Gaussian Process
+a)
+```{r}
+Matern = function(sigmaF, l) {
+  v = 3/2
+  matern = function(x, y) {
+    r = abs(y-x)
+    k = sigmaF^2 * (1 + sqrt(3) * r / l) * exp(-sqrt(3) * r / l)
+    return(k)
+  }
+  class(matern) = "kernel"
+  return(matern)
+}
+```
+
+
+```{r}
+zGrid = seq(0.01, 1, by = 0.01)
+
+# sigmaF = 1
+sigmaF1 = 1
+k1 = Matern(sigmaF = sigmaF1, l = 0.5)
+plot(NA, xlim=c(0,1), ylim=c(0,1), xlab="x", ylab="k(x,x')")
+lines(zGrid, k1(0, zGrid))
+
+# sigmaF = 0.5
+sigmaF2 = 0.5
+k2 = Matern(sigmaF = sigmaF2, l = 0.5)
+plot(NA, xlim=c(0,1), ylim=c(0,1), xlab="x", ylab="k(x,x')")
+lines(zGrid, k2(0, zGrid))
+
+```
+sigmaF=1: Smooth for points that are close to each other since the correlation is higher
+sigmaF=0.5: Same smoothness as sigmaF=1 since the correlation doesn't change. However, given that the standard deviation is smaller the oscillation will be smaller calling for a "smoother" f function in the sense that it moves smaller "steps". Making it more flat in a sense.
+
+Simulate to understand different of different sigmas
+```{r}
+library("mvtnorm")
+n = length(zGrid)
+m = rep(0, n)
+V1 = kernelMatrix(k1, zGrid, zGrid)
+V2 = kernelMatrix(k2, zGrid, zGrid)
+sim1 = rmvnorm(1, mean = m, sigma = V1)
+sim2 = rmvnorm(1, mean = m, sigma = V2)
+
+plot(zGrid, sim1, type="l", col="blue", ylim=c(-2,2))
+lines(zGrid, sim2, col="red", lty=2)
+legend("bottomright", legend=c("sigmaF=1", "sigmaF=0.5"), col=c("blue", "red"), lty=c(1,2))
+
+```
+sigmaF determines steepness of the oscillation whereas ell determines how smooth the oscillation is. It is the standard deviation of the different points (diag(V)), making the correlation the same for the two but the variance of each point is less with sigmaF = 0.5 (compared to 1). Smaller SigmaF tells us that we are more certain about the prior mean (m=0) being the posterior mean. Smaller sigmaF results in thinner probabilistic bands.
+
+b)
+```{r}
+# Setup
+load("lidar.RData")
+sigmaN = 0.05
+dGrid = seq(min(distance), max(distance), length.out=100)
+
+# Fit gaussianc processes
+k1 = Matern(sigmaF = 1, l = 1)
+GP1 = gausspr(x = distance, y = logratio, kernel = k1)
+k5 = Matern(sigmaF = 1, l = 5)
+GP5 = gausspr(x = distance, y = logratio, kernel = k5)
+
+# Posterior mean
+postMean1 = predict(GP1, dGrid)
+postMean5 = predict(GP5, dGrid)
+
+# Covariance
+get_cov = function(x, xStar, K, sigmaN) {
+  n = length(x)
+  I = diag(n)
+  Kss = kernelMatrix(kernel = K, x = xStar, y = xStar)
+  Ksx = kernelMatrix(kernel = K, x = xStar, y = x)
+  Kxs = t(Ksx)
+  Kxx = kernelMatrix(kernel = K, x = x, y = x)
+  V = Kss - Ksx %*% solve(Kxx + sigmaN^2 * I) %*% Kxs
+  return(diag(V))
+}
+V1 = get_cov(scale(distance), scale(dGrid), k1, sigmaN)
+V5 = get_cov(scale(distance), scale(dGrid), k1, sigmaN)
+
+# Plot
+# l = 1
+plot(distance, logratio)
+lines(dGrid, postMean1, col="red")
+lines(dGrid, postMean1 - 1.96 * sqrt(V1))
+lines(dGrid, postMean1 + 1.96 * sqrt(V1))
+lines(dGrid, postMean1 - 1.96 * sqrt(V1 + sigmaN^2), col="blue")
+lines(dGrid, postMean1 + 1.96 * sqrt(V1 + sigmaN^2), col="blue")
+
+# l = 5
+plot(distance, logratio)
+lines(dGrid, postMean5, col="red")
+lines(dGrid, postMean5 - 1.96 * sqrt(V5))
+lines(dGrid, postMean5 + 1.96 * sqrt(V5))
+lines(dGrid, postMean5 - 1.96 * sqrt(V5 + sigmaN^2), col="blue")
+lines(dGrid, postMean5 + 1.96 * sqrt(V5 + sigmaN^2), col="blue")
+
+```
+
+larger l = smoother
+The shape of the data with smaller spread at the start with larger spread at the end can be argued that having one kernel trying to generalize the behaviour as the wrong approach. One suggestion would be to have different kernel values for different distances.
+
+
+
+
+
+
