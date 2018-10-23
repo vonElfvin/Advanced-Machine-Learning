@@ -1,0 +1,328 @@
+---
+title: '191017'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("https://bioconductor.org/biocLite.R")
+biocLite("RBGL")
+install.packages("gRain")
+source("https://bioconductor.org/biocLite.R")
+biocLite("Rgraphviz")
+```
+
+## 1 Graphical Models
+```{r}
+library("bnlearn")
+library("gRain")
+data("asia")
+```
+
+a)
+```{r}
+BN.structure = hc(asia)
+plot(BN.structure)
+```
+
+```{r}
+#  S d-separates L & B
+BN.fit = bn.fit(BN.structure, asia)
+junction_tree = compile(as.grain(BN.fit))
+evidence = setEvidence(junction_tree, nodes = c("S"), states =c("yes"))
+B_given_S = querygrain(evidence, nodes = c("B"), type="joint")
+L_given_S = querygrain(evidence, nodes = c("L"), type="joint")
+B_and_L_given_S = querygrain(evidence, nodes = c("B","L"), type="joint")
+B_given_S[2] * L_given_S[2] - B_and_L_given_S[2,2] # close to zero --> P(L,B|S) = P(L|S)*P(B|S) --> B and L are independent given S
+```
+
+b)
+```{r}
+nGraphs = 1000
+set.seed(123)
+graphs = random.graph(LETTERS[1:5], num = nGraphs, method="melancon")
+
+unique_graphs = unique(graphs)
+cpdags = lapply(unique_graphs, cpdag)
+#n = length(unique_graphs)
+#k = 0
+#for(i in 1:n) {
+#  graph = unique_graphs[[i]]
+#  cpdag = cpdag(graph)
+#  if(all.equal(graph, cpdag) == TRUE){
+#    k = k + 1
+#  }
+#}
+#k/n
+mean(cpdags %in% unique_graphs)
+
+```
+
+
+## 2 Hidden Markov Models
+```{r}
+library("HMM")
+```
+
+a)
+```{r}
+states = 1:100
+symbols = c("door", "wall")
+startProbs = rep(1/100, 100)
+transProbs = diag(0.1, 100) + diag(0.9, 100)[,c(100,1:99)]
+emissionProbs = matrix(c(0.1, 0.9), 100, 2, byrow=TRUE, dimnames = list(states, symbols))
+emissionProbs[10,] = c(0.9,0.1)
+emissionProbs[11,] = c(0.9,0.1)
+emissionProbs[12,] = c(0.9,0.1)
+emissionProbs[20,] = c(0.9,0.1)
+emissionProbs[21,] = c(0.9,0.1)
+emissionProbs[22,] = c(0.9,0.1)
+emissionProbs[30,] = c(0.9,0.1)
+emissionProbs[31,] = c(0.9,0.1)
+emissionProbs[32,] = c(0.9,0.1)
+hmm = initHMM(states, symbols, startProbs, transProbs, emissionProbs)
+```
+
+Simulate to see potential path
+```{r}
+set.seed(123)
+sim = simHMM(hmm, 20)
+sim$states
+sim$observation
+```
+
+b)
+```{r}
+observation = c("door", "door", "door", rep("wall", 10))
+alpha = exp(forward(hmm, observation))
+beta = exp(forward(hmm, observation))
+alphaBetaSum = apply(alpha*beta, 2, sum)
+
+T = length(observation)
+
+smoothing = matrix(NA, 100, T)
+for(t in 1:T) {
+  smoothing[,t] = (alpha[,t]*beta[,t]) / alphaBetaSum[t]
+}
+
+which.maxima<-function(x){
+  return(which(x==max(x)))
+}
+
+for(t in 1:T) {
+  print(which.maxima(smoothing[,t]))
+}
+```
+
+## 3 Gaussian Process
+```{r}
+library("kernlab")
+library("mvtnorm")
+```
+
+
+```{r}
+K = function(sigmaF, l) {
+  k = function(x, y) {
+    r = sqrt(crossprod(x-y))
+    return(sigmaF^2 * exp(-0.5 * (r/l)^2 ))
+  }
+  class(k) = "kernel"
+  return(k)
+}
+```
+
+
+a)
+```{r}
+sigmaF = 1
+xGrid = seq(-1, 1, by=0.1)
+m = rep(0, length(xGrid))
+
+# l = 0.2
+k02 = K(sigmaF, l = 0.2)
+V02 = kernelMatrix(kernel = k02, xGrid, xGrid)
+sim02 = rmvnorm(5, mean = m, sigma = V02)
+plot(NA, xlim=c(-1, 1), ylim=c(-2,2), xlab="x", ylab="f")
+for(i in 1:5){
+  lines(xGrid, sim02[i,])
+}
+
+# l = 1
+k1 = K(sigmaF, l = 1)
+V1 = kernelMatrix(kernel = k1, xGrid, xGrid)
+sim1 = rmvnorm(5, mean = m, sigma = V1)
+plot(NA, xlim=c(-1, 1), ylim=c(-2,2), xlab="x", ylab="f")
+for(i in 1:5){
+  lines(xGrid, sim1[i,])
+}
+```
+
+i)
+```{r}
+k02(0, 0.1)
+k1(0, 0.1)
+```
+Both have reasonably high smoothness for close points (r= 0.1). Can bee seen in the plot where for very small steps the f values don't make too drastic steps.
+
+```{r}
+k02(0, 0.5)
+k1(0, 0.5)
+```
+We can see that a larger l results in higher smoothness given that points that are not as close still correlate a lot. with corr(0, 0.5) = 0.88 (sigmaF = 1). Which can also been seen in comparision of the plots where l=1 is a lot smoother in this range.
+
+
+b)
+```{r}
+load("GPdata.RData")
+sigmaN = 0.2
+sigmaF = 1
+xStar = seq(min(x), max(x), by=0.01)
+```
+
+```{r}
+# l = 0.2
+k02 = K(sigmaF, l = 0.2)
+gp02 = gausspr(x, y, kernel = k02, var = sigmaN^2)
+
+# l = 1
+k1 = K(sigmaF, l = 1)
+gp1 = gausspr(x, y, kernel = k1, var = sigmaN^2, variance.model=TRUE)
+
+# Posterior means
+postMean02 = predict(gp02, xStar)
+postMean1 = predict(gp1, xStar)
+
+# Covariance
+V = function(x, xStar, sigmaN, k) {
+  n = length(x)
+  I = diag(n)
+  Kss = kernelMatrix(kernel = k, x = xStar, y = xStar)
+  Ksx = kernelMatrix(kernel = k, x = xStar, y = x)
+  Kxs = t(Ksx)
+  Kxx = kernelMatrix(kernel = k, x = x, y = x)
+  Cov = Kss - Ksx %*% solve(Kxx + sigmaN^2 * I) %*% Kxs
+  V = diag(Cov)
+  return(V)
+}
+V02 = V(scale(x), scale(xStar), sigmaN, k = k02)
+V1 = V(scale(x), scale(xStar), sigmaN, k = k1)
+
+# Plots
+plot(x, y)
+lines(xStar, postMean02, col="red")
+lines(xStar, postMean02 + 1.96 * sqrt(V02))
+lines(xStar, postMean02 - 1.96 * sqrt(V02))
+lines(xStar, postMean02 + 1.96 * sqrt(V02 + sigmaN^2), col="blue")
+lines(xStar, postMean02 - 1.96 * sqrt(V02 + sigmaN^2), col="blue")
+
+
+plot(x, y)
+lines(xStar, postMean1, col="red")
+lines(xStar, postMean1 + 1.96 * sqrt(V1))
+lines(xStar, postMean1 - 1.96 * sqrt(V1))
+lines(xStar, postMean1 + 1.96 * sqrt(V1 + sigmaN^2), col="blue")
+lines(xStar, postMean1 - 1.96 * sqrt(V1 + sigmaN^2), col="blue")
+```
+
+## 4 State Space Models
+```{r}
+T = 10000
+```
+
+
+a)
+```{r}
+transitionSample = function(xPrev) {
+  rnorm(1, mean = xPrev + 1, sd = 1)
+}
+
+emissionSample = function(x) {
+  rnorm(1, mean = x, sd = 5)
+}
+
+initSample = function() {
+  rnorm(1, mean = 50, sd = 10)
+}
+
+simulate = function() {
+  x = c()
+  z = c()
+  for(t in 1:T) {
+    if(t == 1) x[t] = initSample()
+    else x[t] = transitionSample(x[t-1])
+    
+    z[t] = emissionSample(x[t])
+  }
+  return(data.frame(x = x, z = z))
+}
+
+set.seed(123)
+sim = simulate()
+plot(1:100, sim$x[1:100], col="blue", type="l")
+lines(1:100, sim$z[1:100], col="red")
+```
+
+
+Kalman Filter
+```{r}
+get_kalman = function(z) {
+  # Setup
+  mu0 = 50
+  sigma0 = 100
+  A = 1
+  B = 1
+  u = 1
+  R = 1
+  C = 1
+  Q = 25
+  mu = c()
+  sigma = c()
+  muBar = c()
+  sigmaBar = c()
+  
+  # Algorithm
+  mu[1] = mu0
+  sigma[1] = sigma0
+  for(t in 2:T) {
+    muBar[t] = A * mu[t-1] + B * u
+    sigmaBar[t] = A * sigma[t-1] * A + R
+    K = sigmaBar[t] * C * (C * sigmaBar[t]*C + Q)^-1
+    mu[t] = muBar[t] + K * (z[t] - C * muBar[t])
+    sigma[t] = (1 - K * C) * sigmaBar[t]
+  }
+  
+  return(data.frame(mu = mu, sigma = sigma))
+}
+
+kalman = get_kalman(sim$z)
+plot(1:100, sim$x[1:100], col="blue", type="l")
+lines(1:100, sim$z[1:100], col="red")
+lines(1:100, kalman$mu[1:100], col="green")
+```
+
+Particle Filter
+```{r}
+get_particles = function(z, M) {
+  X = matrix(NA, M, T)
+  for(t in 1:T) {
+    x = c()
+    w = c()
+    for(m in 1:M) {
+      if(t == 1) x[m] = initSample()
+      else x[m] = transitionSample(X[m, t-1])
+      
+      w[m] = dnorm(z[t], mean = x[m], 5)
+    }
+    X[,t] = sample(x, size = M, replace = TRUE, prob = w)
+  }
+  return(X)
+}
+
+particles = get_particles(sim$z, 100)
+particleMean = apply(particles, 2, mean)
+
+plot(1:100, sim$x[1:100], col="blue", type="l")
+lines(1:100, sim$z[1:100], col="red")
+lines(1:100, particleMean[1:100], col="green")
+```
