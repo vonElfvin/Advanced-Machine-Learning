@@ -514,3 +514,39 @@ sigmaN = sd(lm$residuals)
 V1 = get_covariance(x, xStar, sigmaN, SEK1)
 ```
 
+```{r}
+library("bnlearn")
+data("asia")
+data = asia
+```
+
+```{r}
+
+n = dim(data)[1]
+set.seed(123)
+idx = sample(1:n, n*0.8)
+train = data[idx,]
+test = data[-idx,]
+```
+
+```{r}
+set.seed(123)
+bn.structure = hc(train)
+bn.fit = bn.fit(bn.structure, train)
+
+set.seed(123)
+preds = c()
+for(i in 1:1000){
+  dist = cpdist(bn.fit, "S", (
+    A == test[i,]$A & 
+    T == test[i,]$T & 
+    L == test[i,]$L & 
+    B == test[i,]$B & 
+    E == test[i,]$E &
+    X == test[i,]$X &
+    D == test[i,]$D))
+  preds[i] = prop.table(table(dist))[2] > 0.5
+}
+table(test$S, preds)
+```
+
