@@ -181,8 +181,8 @@ initTransitionSample = function() {
   rnorm(1, mean = 50, sd = 10)
 }
 
-transitionSample = function(x) {
-  rnorm(1, mean = x + 1, sd = 1)
+transitionSample = function(xPrev) {
+  rnorm(1, mean = xPrev + 1, sd = 1)
 }
 
 emissionSample = function(x) {

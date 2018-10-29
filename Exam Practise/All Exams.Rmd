@@ -30,6 +30,8 @@ P_L_given_S = cpquery(BN.fit, (L == "yes"), (S == 'yes'))
 P_B_given_S = cpquery(BN.fit, (B == "yes"), (S == "yes"))
 P_BL_given_S = cpquery(BN.fit, ((L == "yes") & (B == "yes")), (S == "yes"))
 P_BL_given_S - P_L_given_S * P_B_given_S 
+prop.table(table(cpdist(BN.fit, nodes = "L", evidence = (S == "yes"))))
+P_L_given_S
 # almost zero ~ independent using independece test: P(B,L|S) = P(B|S)*P(L|S)
 ```
 
@@ -227,6 +229,11 @@ hmm = initHMM(states, symbols, startProbs = startProbs, transProbs = transProbs,
 kable(transProbs, caption="Transition probabilities")
 kable(emissionProbs, caption="Emission probabilities", digits=2)
 ``` 
+
+```{r}
+sim = simHMM(hmm, 100)
+sim$states
+```
 
 c) ForwardBackward Algorithm
 
@@ -496,35 +503,30 @@ get_cov = function(x, xStar, K, sigmaN) {
   Kxs = t(Ksx)
   Kxx = kernelMatrix(kernel = K, x = x, y = x)
   V = Kss - Ksx %*% solve(Kxx + sigmaN^2 * I) %*% Kxs
-  return(diag(V))
+  return(V)
 }
 V1 = get_cov(scale(distance), scale(dGrid), k1, sigmaN)
-V5 = get_cov(scale(distance), scale(dGrid), k1, sigmaN)
+V5 = get_cov(scale(distance), scale(dGrid), k5, sigmaN)
 
 # Plot
 # l = 1
 plot(distance, logratio)
 lines(dGrid, postMean1, col="red")
-lines(dGrid, postMean1 - 1.96 * sqrt(V1))
-lines(dGrid, postMean1 + 1.96 * sqrt(V1))
-lines(dGrid, postMean1 - 1.96 * sqrt(V1 + sigmaN^2), col="blue")
-lines(dGrid, postMean1 + 1.96 * sqrt(V1 + sigmaN^2), col="blue")
+lines(dGrid, postMean1 - 1.96 * sqrt(diag(V1)))
+lines(dGrid, postMean1 + 1.96 * sqrt(diag(V1)))
+lines(dGrid, postMean1 - 1.96 * sqrt(diag(V1) + sigmaN^2), col="blue")
+lines(dGrid, postMean1 + 1.96 * sqrt(diag(V1) + sigmaN^2), col="blue")
+lines(dGrid, sampels, col="green")
 
 # l = 5
 plot(distance, logratio)
 lines(dGrid, postMean5, col="red")
-lines(dGrid, postMean5 - 1.96 * sqrt(V5))
-lines(dGrid, postMean5 + 1.96 * sqrt(V5))
-lines(dGrid, postMean5 - 1.96 * sqrt(V5 + sigmaN^2), col="blue")
-lines(dGrid, postMean5 + 1.96 * sqrt(V5 + sigmaN^2), col="blue")
+lines(dGrid, postMean5 - 1.96 * sqrt(diag(V5)))
+lines(dGrid, postMean5 + 1.96 * sqrt(diag(V5)))
+lines(dGrid, postMean5 - 1.96 * sqrt(diag(V5) + sigmaN^2), col="blue")
+lines(dGrid, postMean5 + 1.96 * sqrt(diag(V5) + sigmaN^2), col="blue")
 
 ```
 
 larger l = smoother
 The shape of the data with smaller spread at the start with larger spread at the end can be argued that having one kernel trying to generalize the behaviour as the wrong approach. One suggestion would be to have different kernel values for different distances.
-
-
-
-
-
-
